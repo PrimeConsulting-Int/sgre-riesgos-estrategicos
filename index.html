@@ -208,8 +208,8 @@ tr:hover td { background: rgba(29,78,216,0.04); }
     <p>Prime Consulting International LLC · Risk. Governance. Continuity. Compliance.</p>
   </div>
   <div class="header-right">
-    <span id="orgNameDisplay">Sin organización</span>
-    <span id="dateDisplay"></span>
+    <span id="orgNameDisplay"></span>
+    <span id="dateDisplay" style="color: var(--white);"></span>
     <span style="margin-top:4px;">
       <span class="tag iso-tag">ISO 31000</span>
       <span class="tag iso-tag">COSO ERM</span>
@@ -754,7 +754,7 @@ function showTab(id) {
 // ========== CONTEXT ==========
 function updateOrgDisplay() {
   const v = document.getElementById('orgName').value;
-  document.getElementById('orgNameDisplay').textContent = v || 'Sin organización';
+  document.getElementById('orgNameDisplay').textContent = v || '';
 }
 function saveContext() {
   context = {
