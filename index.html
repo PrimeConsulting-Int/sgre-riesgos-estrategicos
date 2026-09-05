@@ -1074,11 +1074,76 @@ Analiza el siguiente perfil institucional y genera: 1) Diagnóstico estratégico
 ${getContextSummary()}`, 'contextAI');
 }
 
-function generateRisks() {
+function parseMarkdownTable(text) {
+  const rows = [];
+  text.split('\n').forEach(line => {
+    const t = line.trim();
+    if (!t.startsWith('|')) return;
+    const cells = t.split('|').map(c => c.trim()).filter((c,i,arr) => !(i===0 && c==='') && !(i===arr.length-1 && c===''));
+    if (!cells.length) return;
+    if (cells.every(c => /^:?-+:?$/.test(c))) return; // separator row
+    if (/^id$/i.test(cells[0])) return; // header row
+    rows.push(cells);
+  });
+  return rows;
+}
+
+async function generateRisks() {
   saveContext();
-  callClaude(`Eres experto en riesgos estratégicos para instituciones financieras de América Latina. 
-Basándote en el siguiente perfil, identifica los 8 riesgos estratégicos MÁS RELEVANTES y específicos. Para cada uno indica: ID, Categoría, Descripción específica, Objetivo afectado y Causa raíz principal. Formato conciso tipo tabla de texto. NO incluyas preamble, ve directo a los riesgos.
-${getContextSummary()}`, 'risksAI');
+  if (!apiKey.startsWith('sk-ant-')) {
+    const el = document.getElementById('risksAI');
+    el.style.display = 'block';
+    el.innerHTML = '<h4>⚠️ Falta la clave de API</h4><div class="ai-response">Pega tu clave de API de Anthropic (sk-ant-...) en el campo de la esquina superior derecha para usar las funciones de IA.</div>';
+    return;
+  }
+  const el = document.getElementById('risksAI');
+  el.style.display = 'block';
+  el.innerHTML = '<div class="ai-loading"><div class="spinner"></div><span>Generando catálogo con IA...</span></div>';
+  const prompt = `Eres experto en riesgos estratégicos para instituciones financieras de América Latina.
+Basándote en el siguiente perfil, identifica los 8 riesgos estratégicos MÁS RELEVANTES y específicos. Responde EXCLUSIVAMENTE con una tabla Markdown (sin texto antes ni después) con estas columnas exactas: ID | Categoría | Descripción | Objetivo afectado | Causa raíz.
+${getContextSummary()}`;
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({ model: 'claude-sonnet-5', max_tokens: 1200, messages: [{ role: 'user', content: prompt }] })
+    });
+    const data = await resp.json();
+    if (!resp.ok) { el.innerHTML = `<h4>⚠️ Error</h4><div class="ai-response">${data?.error?.message || `Error HTTP ${resp.status}`}</div>`; return; }
+    const text = data.content?.map(c => c.text||'').join('') || '';
+    const rows = parseMarkdownTable(text);
+    if (!rows.length) {
+      el.innerHTML = `<h4>⚠️ No se pudo interpretar la respuesta</h4><div class="ai-response">${text}</div>`;
+      return;
+    }
+    riskCounter = risks.length + 1;
+    let added = 0;
+    rows.forEach(cells => {
+      const [, cat, desc, obj, cause] = cells; // cells[0] es el ID que propone la IA; generamos uno propio para evitar choques
+      if (!desc) return;
+      risks.push({
+        id: 'RE-' + String(riskCounter++).padStart(2,'0'),
+        cat: cat || 'Sin categoría',
+        desc,
+        obj: obj || '-',
+        cause: cause || '-',
+        prob: 3,
+        impact: 3,
+        speed: 'Moderada'
+      });
+      added++;
+    });
+    renderRisksTable();
+    updateEvalTable();
+    el.innerHTML = `<h4>✅ Catálogo generado</h4><div class="ai-response">Se agregaron ${added} riesgo(s) al catálogo (con P=3 / I=3 por defecto — ajústalos en el Paso 3 o usa "Auto-Evaluar con IA").</div>`;
+  } catch(e) {
+    el.innerHTML = `<h4>⚠️ Error</h4><div class="ai-response">Error al conectar con la IA. Verifica la conexión.</div>`;
+  }
 }
 
 function generateEvalNarrative() {
